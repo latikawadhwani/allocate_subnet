@@ -76,9 +76,7 @@ def allocate_new(networks, allocated, requested):
             allocated.append(str(n))
             data_new={"allocated": allocated}
             print('new json')
-            print(data_new)
             dump_to_json_file(data_new)
-            print(n)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:
