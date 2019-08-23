@@ -95,7 +95,14 @@ def main():
 
     print('executing main')
 
+    if len(sys.argv) < 2:
+        print("Incorrect usage")
+        sys.exit()
+
     requested=str(sys.argv[1])
+    if requested not in Addresses:
+        print('Invalid size')
+        sys.exit()
     print('requested size - ' + requested)
 
     # TODO get network address from input
@@ -114,7 +121,7 @@ def main():
     else:
         print('getting previous allocations')
         prev_allocation = get_same_or_next(networks, allocated)
-        
+
     networks_updated = prev_allocation['networks']
     allocated_updated = prev_allocation['allocated']
     print('available - ')
