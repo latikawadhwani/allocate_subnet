@@ -57,8 +57,8 @@ def get_same_or_next(networks, allocated):
     return prev_allocation
 
 def allocate_new(networks, allocated, requested):
-    l=len(networks)
-    for i in reversed(range(l)):
+    len_networks = len(networks)
+    for i in reversed(range(len_networks)):
         print(networks[i])
         print(networks[i].num_addresses)
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
@@ -104,7 +104,7 @@ def main():
     print('requested size - ' + requested)
 
     # TODO get network address from input
-    networks=[IPv4Network(u'192.0.0.0/16')]
+    networks=[IPv4Network(u'192.0.0.0/24')]
 
     networks_updated = []
     allocated_updated = []
@@ -126,15 +126,17 @@ def main():
     print(networks_updated)
     print('allocated - ')
     print(allocated_updated)
-    
-    new_allocation = allocate_new(networks_updated, allocated_updated, requested)
-    network_new = new_allocation['networks']
-    allocated_new = new_allocation['allocated']
 
-    print("available network - ")
-    print(network_new)
-    print("allocated pool - ")
-    print(allocated_new)
+    if not networks_updated:
+        print('none available')
+    else:
+        new_allocation = allocate_new(networks_updated, allocated_updated, requested)
+        network_new = new_allocation['networks']
+        allocated_new = new_allocation['allocated']
+        print("available network - ")
+        print(network_new)
+        print("allocated pool - ")
+        print(allocated_new)
 
 
 if __name__ == "__main__":
