@@ -9,6 +9,12 @@ Size = {'small': 24, 'medium': 23, 'large': 22}
 # TODO: Save and get map from db 
 Addresses = {'small': 256, 'medium': 512, 'large': 1024} 
 
+def get_previous_allocation_list():
+    allocated = []
+    with open('allocated.json') as json_file:
+        data = json.load(json_file)
+        allocated = data["allocated"]
+    return allocated
 
 def dump_to_json_file(data_new):
     with open('allocated.json', 'w') as outfile:
@@ -17,7 +23,6 @@ def dump_to_json_file(data_new):
 #sort network list
 def sort_networks(networks):
     n = len(networks)
-
     for i in range(n):
         for j in range(0, n-i-1):
             num_hosts_j = networks[j].num_addresses
@@ -26,6 +31,7 @@ def sort_networks(networks):
             if num_hosts_j < num_hosts_next :
                 networks[j], networks[j+1] = networks[j+1], networks[j]
 
+# calculate updated from previous allocations
 def get_same_or_next(networks, allocated):
     for allocated_network in allocated:
         a=IPv4Network(allocated_network)
@@ -87,34 +93,35 @@ def allocate_new(networks, allocated, requested):
 
 def main():
 
+    print('executing main')
+
     requested=str(sys.argv[1])
     print('requested size - ' + requested)
 
     # TODO get network address from input
     networks=[IPv4Network(u'192.0.0.0/16')]
 
-    allocated = []
     networks_updated = []
     allocated_updated = []
     prev_allocation = dict()
 
-    with open('allocated.json') as json_file:
-        data = json.load(json_file)
-        allocated = data["allocated"]
+    allocated = get_previous_allocation_list()
 
     if not allocated:
         print("none allocated, skip checking previous allocations")
+        prev_allocation['networks'] = networks
+        prev_allocation['allocated'] = allocated
     else:
+        print('getting previous allocations')
         prev_allocation = get_same_or_next(networks, allocated)
-        networks_updated = prev_allocation['networks']
-        allocated_updated = prev_allocation['allocated']
-        print('available - ')
-        print(networks_updated)
-        print('allocated - ')
-        print(allocated_updated)
-    
-    print("available network - ")
+        
+    networks_updated = prev_allocation['networks']
+    allocated_updated = prev_allocation['allocated']
+    print('available - ')
     print(networks_updated)
+    print('allocated - ')
+    print(allocated_updated)
+    
     new_allocation = allocate_new(networks_updated, allocated_updated, requested)
     network_new = new_allocation['networks']
     allocated_new = new_allocation['allocated']
@@ -126,7 +133,6 @@ def main():
 
 
 if __name__ == "__main__":
-    # execute only if run as a script
     main()
 
 
