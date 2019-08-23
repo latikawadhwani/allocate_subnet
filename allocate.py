@@ -3,30 +3,19 @@ import ipaddress
 from ipaddress import *
 import json
 
-allocated=[]
-with open('allocated.json') as json_file:
-    data = json.load(json_file)
-    allocated = data["allocated"]
 
-Size = {'small': 30, 'medium': 29, 'large': 28, 'xlarge': 27}
+Size = {'small': 24, 'medium': 23, 'large': 22}
 
 # TODO: Save and get map from db 
-Addresses = {'small': 4, 'medium': 8, 'large': 16, 'xlarge': 32} 
-
-# TODO get network address from input
-networks=[IPv4Network(u'192.0.2.0/24')]
-
-requested=str(sys.argv[1])
-print('requested size - ' + requested)
+Addresses = {'small': 256, 'medium': 512, 'large': 1024} 
 
 
 def dump_to_json_file(data_new):
     with open('allocated.json', 'w') as outfile:
                 json.dump(data_new, outfile)
 
-
 #sort network list
-def sort_networks():
+def sort_networks(networks):
     n = len(networks)
 
     for i in range(n):
@@ -37,7 +26,7 @@ def sort_networks():
             if num_hosts_j < num_hosts_next :
                 networks[j], networks[j+1] = networks[j+1], networks[j]
 
-def get_same_or_next():
+def get_same_or_next(networks, allocated):
     for allocated_network in allocated:
         a=IPv4Network(allocated_network)
         for network in networks:
@@ -45,7 +34,7 @@ def get_same_or_next():
             if (a==n):
                 print("same")
                 networks.remove(n)
-                sort_networks()
+                sort_networks(networks)
                 break
             elif (a.subnet_of(n)):
                 print("subnet")
@@ -53,22 +42,16 @@ def get_same_or_next():
                 after_exclude=list(n.address_exclude(a))
                 for addr in after_exclude:
                     networks.append(addr)
-                    sort_networks()
+                    sort_networks(networks)
                 break
                 # update networks
+    prev_allocation = dict() 
+    prev_allocation['networks'] = networks
+    prev_allocation['allocated'] = allocated
+    return prev_allocation
 
-if not allocated:
-    print("none allocated, skip checking previous allocations")
-else:
-    get_same_or_next()
-    print('available - ')
-    print(networks)
-    print('allocated - ')
-    print(allocated)
-
-l=len(networks)
-
-def allocate_new():
+def allocate_new(networks, allocated, requested):
+    l=len(networks)
     for i in reversed(range(l)):
         print(networks[i])
         print(networks[i].num_addresses)
@@ -95,17 +78,55 @@ def allocate_new():
             for addr in after_exclude:
                     networks.append(addr)
             break
+    
+    new_allocation = dict() 
+    new_allocation['networks'] = networks
+    new_allocation['allocated'] = allocated
+    return new_allocation
 
-print('sorting networks after allocation')
-sort_networks()
-print(networks)
+
+def main():
+
+    requested=str(sys.argv[1])
+    print('requested size - ' + requested)
+
+    # TODO get network address from input
+    networks=[IPv4Network(u'192.0.0.0/16')]
+
+    allocated = []
+    networks_updated = []
+    allocated_updated = []
+    prev_allocation = dict()
+
+    with open('allocated.json') as json_file:
+        data = json.load(json_file)
+        allocated = data["allocated"]
+
+    if not allocated:
+        print("none allocated, skip checking previous allocations")
+    else:
+        prev_allocation = get_same_or_next(networks, allocated)
+        networks_updated = prev_allocation['networks']
+        allocated_updated = prev_allocation['allocated']
+        print('available - ')
+        print(networks_updated)
+        print('allocated - ')
+        print(allocated_updated)
+    
+    print("available network - ")
+    print(networks_updated)
+    new_allocation = allocate_new(networks_updated, allocated_updated, requested)
+    network_new = new_allocation['networks']
+    allocated_new = new_allocation['allocated']
+
+    print("available network - ")
+    print(network_new)
+    print("allocated pool - ")
+    print(allocated_new)
 
 
-print("available network - ")
-print(networks)
-allocate_new()
-print("available network - ")
-print(networks)
-print("allocated pool - ")
-print(allocated)
+if __name__ == "__main__":
+    # execute only if run as a script
+    main()
+
 
