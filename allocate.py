@@ -20,16 +20,6 @@ def dump_to_json_file(data_new):
     with open('allocated.json', 'w') as outfile:
                 json.dump(data_new, outfile)
 
-#sort network list
-def sort_networks(networks):
-    n = len(networks)
-    for i in range(n):
-        for j in range(0, n-i-1):
-            num_hosts_j = networks[j].num_addresses
-            num_hosts_next = networks[j+1].num_addresses
-            # Swap if the number of addresses found is greater than in next subnet
-            if num_hosts_j < num_hosts_next :
-                networks[j], networks[j+1] = networks[j+1], networks[j]
 
 # calculate updated from previous allocations
 def get_same_or_next(networks, allocated):
@@ -40,7 +30,7 @@ def get_same_or_next(networks, allocated):
             if (a==n):
                 print("same")
                 networks.remove(n)
-                sort_networks(networks)
+                networks = sorted(networks)
                 break
             elif (a.subnet_of(n)):
                 print("subnet")
@@ -48,9 +38,9 @@ def get_same_or_next(networks, allocated):
                 after_exclude=list(n.address_exclude(a))
                 for addr in after_exclude:
                     networks.append(addr)
-                    sort_networks(networks)
+                networks = sorted(networks)
                 break
-                # update networks
+                
     prev_allocation = dict() 
     prev_allocation['networks'] = networks
     prev_allocation['allocated'] = allocated
@@ -59,7 +49,8 @@ def get_same_or_next(networks, allocated):
 def allocate_new(networks, allocated, requested):
     len_networks = len(networks)
     len_allocated = len(allocated)
-    for i in reversed(range(len_networks)):
+    for i in range(len_networks):
+        print('checking availability in ' + str(i))
         print(networks[i])
         print('available addresses')
         print(networks[i].num_addresses)
@@ -71,18 +62,11 @@ def allocate_new(networks, allocated, requested):
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
-            print("getting subnets")
-            print(list(networks[i].subnets(new_prefix=Size[requested])))
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
             data_new={"allocated": allocated}
-            print('new json')
             dump_to_json_file(data_new)
-            after_exclude=list(networks[i].address_exclude(n))
-            networks.remove(networks[i])
-            for addr in after_exclude:
-                    networks.append(addr)
             break
     if(len(allocated) == len_allocated):
                 print('not allocated, try another size. Available - ' + str(networks[i].num_addresses))
@@ -95,8 +79,6 @@ def allocate_new(networks, allocated, requested):
 
 
 def main():
-
-    print('executing main')
 
     if len(sys.argv) < 2:
         print("Incorrect usage")
