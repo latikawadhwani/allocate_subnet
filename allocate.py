@@ -4,10 +4,10 @@ from ipaddress import *
 import json
 
 
-Size = {'small': 24, 'medium': 23, 'large': 22}
+Size = {'small': 30, 'medium': 29, 'large': 28}
 
 # TODO: Save and get map from db 
-Addresses = {'small': 256, 'medium': 512, 'large': 1024} 
+Addresses = {'small': 4, 'medium': 8, 'large': 16} 
 
 def get_previous_allocation_list():
     allocated = []
@@ -58,8 +58,10 @@ def get_same_or_next(networks, allocated):
 
 def allocate_new(networks, allocated, requested):
     len_networks = len(networks)
+    len_allocated = len(allocated)
     for i in reversed(range(len_networks)):
         print(networks[i])
+        print('available addresses')
         print(networks[i].num_addresses)
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
@@ -82,6 +84,9 @@ def allocate_new(networks, allocated, requested):
             for addr in after_exclude:
                     networks.append(addr)
             break
+    if(len(allocated) == len_allocated):
+                print('not allocated, try another size. Available - ' + str(networks[i].num_addresses))
+                sys.exit()
     
     new_allocation = dict() 
     new_allocation['networks'] = networks
