@@ -67,6 +67,10 @@ def allocate_new(networks, allocated, requested):
             allocated.append(str(n))
             data_new={"allocated": allocated}
             dump_to_json_file(data_new)
+            after_exclude=list(networks[i].address_exclude(n))
+            networks.remove(networks[i])
+            for addr in after_exclude:
+                networks.append(addr)
             break
     if(len(allocated) == len_allocated):
                 print('not allocated, try another size. Available - ' + str(networks[i].num_addresses))
