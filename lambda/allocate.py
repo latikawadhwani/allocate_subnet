@@ -30,6 +30,15 @@ def update_allocated(username, allocated_address, allocated_size):
             'allocated_address': allocated_address
         })
 
+def get_requested_size(id):
+    table = dynamodb.Table('lambda-allocation-requests')
+    response = table.query(
+    KeyConditionExpression=Key('id').eq(id))
+    items = response['Items']
+    for item in items:
+        print(item)
+        return item['request_size']
+
 # calculate updated from previous allocations
 def get_same_or_next(networks, allocated):
     for allocated_network in allocated:
@@ -93,8 +102,13 @@ def allocate_new(networks, allocated, requested):
 def lambda_handler(event, context):
 
     networks = [IPv4Network('192.0.0.0/24')]
+    requested = ""
+    
+    for record in event['Records']:
+        if(record['eventName'] == "INSERT"):
+            id = record['dynamodb']['Keys']['id']['S']
+            requested = get_requested_size(id)
 
-    requested='small'
     if requested not in Addresses:
         print('Invalid size')
         sys.exit()
@@ -131,4 +145,4 @@ def lambda_handler(event, context):
         print("available network - ")
         print(network_new)
         print("allocated pool - ")
-        print(allocated_new)    
+        print(allocated_new)
