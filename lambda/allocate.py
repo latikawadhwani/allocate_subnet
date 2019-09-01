@@ -1,25 +1,34 @@
-import sys
+
 import ipaddress
 from ipaddress import *
 import json
+import boto3
 
 
 Size = {'small': 30, 'medium': 29, 'large': 28}
 
-# TODO: Save and get map from db 
-Addresses = {'small': 4, 'medium': 8, 'large': 16} 
+# TODO: Save and get map from db
+Addresses = {'small': 4, 'medium': 8, 'large': 16}
+
+dynamodb = boto3.resource('dynamodb')
 
 def get_previous_allocation_list():
     allocated = []
-    with open('allocated.json') as json_file:
-        data = json.load(json_file)
-        allocated = data["allocated"]
+    table = dynamodb.Table('account_allocations')
+    response = table.scan()
+    items = response['Items']
+    for item in items:
+        allocated.append(item['allocated_address'])
     return allocated
 
-def dump_to_json_file(data_new):
-    with open('allocated.json', 'w') as outfile:
-                json.dump(data_new, outfile)
-
+def update_allocated(username, allocated_address, allocated_size):
+    table = dynamodb.Table('account_allocations')
+    table.put_item(
+        Item={
+            'username': username,
+            'allocated_size': allocated_size,
+            'allocated_address': allocated_address
+        })
 
 # calculate updated from previous allocations
 def get_same_or_next(networks, allocated):
@@ -40,8 +49,8 @@ def get_same_or_next(networks, allocated):
                     networks.append(addr)
                 networks = sorted(networks)
                 break
-                
-    prev_allocation = dict() 
+
+    prev_allocation = dict()
     prev_allocation['networks'] = networks
     prev_allocation['allocated'] = allocated
     return prev_allocation
@@ -57,16 +66,14 @@ def allocate_new(networks, allocated, requested):
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
             allocated.append(str(networks[i]))
-            data_new={"allocated": allocated}
-            dump_to_json_file(data_new)
+            update_allocated('some_user', str(networks[i]), requested)
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
-            data_new={"allocated": allocated}
-            dump_to_json_file(data_new)
+            update_allocated('some_user', str(n), requested)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:
@@ -75,27 +82,23 @@ def allocate_new(networks, allocated, requested):
     if(len(allocated) == len_allocated):
                 print('not allocated, try another size. Available - ' + str(networks[i].num_addresses))
                 sys.exit()
-    
-    new_allocation = dict() 
+
+    new_allocation = dict()
     new_allocation['networks'] = networks
     new_allocation['allocated'] = allocated
     return new_allocation
 
 
-def main():
 
-    if len(sys.argv) < 2:
-        print("Incorrect usage")
-        sys.exit()
+def lambda_handler(event, context):
 
-    requested=str(sys.argv[1])
+    networks = [IPv4Network('192.0.0.0/24')]
+
+    requested='small'
     if requested not in Addresses:
         print('Invalid size')
         sys.exit()
     print('requested size - ' + requested)
-
-    # TODO get network address from input
-    networks=[IPv4Network(u'192.0.0.0/24')]
 
     networks_updated = []
     allocated_updated = []
@@ -113,6 +116,7 @@ def main():
 
     networks_updated = prev_allocation['networks']
     allocated_updated = prev_allocation['allocated']
+
     print('available - ')
     print(networks_updated)
     print('allocated - ')
@@ -127,10 +131,4 @@ def main():
         print("available network - ")
         print(network_new)
         print("allocated pool - ")
-        print(allocated_new)
-
-
-if __name__ == "__main__":
-    main()
-
-
+        print(allocated_new)    
