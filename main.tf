@@ -41,6 +41,12 @@ resource "aws_iam_role_policy_attachment" "AWSLambdaExecute-attach" {
   policy_arn = "arn:aws:iam::aws:policy/AWSLambdaExecute"
 }
 
+
+resource "aws_iam_role_policy_attachment" "AWSLambdaDynamoDbRead-attach" {
+  role       = "${aws_iam_role.iam_role_for_lambda.name}"
+  policy_arn = "arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB"
+}
+
 resource "aws_dynamodb_table" "lambda-allocation-requests" {
   name = "lambda-allocation-requests"
   hash_key = "id"
