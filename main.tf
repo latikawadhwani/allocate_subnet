@@ -1,18 +1,18 @@
 data "archive_file" "allocate" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/"
-  output_path = "${path.module}/lambda/allocate.zip"
+  output_path = "${path.module}/allocate.zip"
 }
 
 resource "aws_lambda_function" "function_allocate" {
   function_name    = "allocate"
-  description      = "!"
+  description      = "lambda function to allocate subnet"
   role             = "${aws_iam_role.iam_role_for_lambda.arn}"
   memory_size      = "${var.memory_size}"
   runtime          = "${var.runtime}"
   timeout          = "${var.timeout}"
-  handler          = "test-asdf1234.lambda_handler"
-  filename         = "${path.module}/lambda/allocate.zip"
+  handler          = "allocate.lambda_handler"
+  filename         = "${path.module}/allocate.zip"
   source_code_hash = "${data.archive_file.allocate.output_base64sha256}"
 }
 
@@ -39,4 +39,24 @@ EOF
 resource "aws_iam_role_policy_attachment" "AWSLambdaExecute-attach" {
   role       = "${aws_iam_role.iam_role_for_lambda.name}"
   policy_arn = "arn:aws:iam::aws:policy/AWSLambdaExecute"
+}
+
+resource "aws_dynamodb_table" "lambda-allocation-requests" {
+  name = "lambda-allocation-requests"
+  hash_key = "id"
+  billing_mode = "PROVISIONED"
+  read_capacity = 20
+  write_capacity = 20
+  attribute {
+    name = "id"
+    type = "S"
+  }
+  stream_enabled = "true"
+  stream_view_type = "KEYS_ONLY"
+}
+
+resource "aws_lambda_event_source_mapping" "lambda_allocation_stream" {
+  event_source_arn  = "${aws_dynamodb_table.lambda-allocation-requests.stream_arn}"
+  function_name     = "${aws_lambda_function.function_allocate.function_name}"
+  starting_position = "LATEST"
 }
