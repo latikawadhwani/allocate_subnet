@@ -15,3 +15,27 @@ variable "timeout" {
   type        = "string"
   default     = "10"
 }
+
+variable "read_capacity" {
+  description = "number of read units"
+  type        = "string"
+  default     = "20"
+}
+
+variable "write_capacity" {
+  description = "number of read units"
+  type        = "string"
+  default     = "20"
+}
+
+variable "stream_enabled" {
+  description = "stream enabled or disabled for dynamoDB table"
+  type        = "string"
+  default     = "true"
+}
+
+variable "stream_view_type" {
+  description = "stream view type for dynamoDB table"
+  type        = "string"
+  default     = "KEYS_ONLY"
+}

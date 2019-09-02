@@ -51,14 +51,14 @@ resource "aws_dynamodb_table" "lambda-allocation-requests" {
   name = "lambda-allocation-requests"
   hash_key = "id"
   billing_mode = "PROVISIONED"
-  read_capacity = 20
-  write_capacity = 20
+  read_capacity = "${var.read_capacity}"
+  write_capacity = "${var.write_capacity}"
   attribute {
     name = "id"
     type = "S"
   }
-  stream_enabled = "true"
-  stream_view_type = "KEYS_ONLY"
+  stream_enabled = "${var.stream_enabled}"
+  stream_view_type = "${var.stream_view_type}"
 }
 
 resource "aws_lambda_event_source_mapping" "lambda_allocation_stream" {
