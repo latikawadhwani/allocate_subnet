@@ -4,6 +4,7 @@ from ipaddress import *
 import json
 import boto3
 
+networks = [IPv4Network('192.0.0.0/24')]
 
 Size = {'small': 30, 'medium': 29, 'large': 28}
 
@@ -97,22 +98,11 @@ def allocate_new(networks, allocated, requested):
     new_allocation['allocated'] = allocated
     return new_allocation
 
-
-
-def lambda_handler(event, context):
-
-    networks = [IPv4Network('192.0.0.0/24')]
-    requested = ""
-    
-    for record in event['Records']:
-        if(record['eventName'] == "INSERT"):
-            id = record['dynamodb']['Keys']['id']['S']
-            requested = get_requested_size(id)
-
-    if requested not in Addresses:
+def process_request(requested_size):
+    if requested_size not in Addresses:
         print('Invalid size')
         sys.exit()
-    print('requested size - ' + requested)
+    print('requested size - ' + requested_size)
 
     networks_updated = []
     allocated_updated = []
@@ -139,10 +129,22 @@ def lambda_handler(event, context):
     if not networks_updated:
         print('none available')
     else:
-        new_allocation = allocate_new(networks_updated, allocated_updated, requested)
+        new_allocation = allocate_new(networks_updated, allocated_updated, requested_size)
         network_new = new_allocation['networks']
         allocated_new = new_allocation['allocated']
         print("available network - ")
         print(network_new)
         print("allocated pool - ")
         print(allocated_new)
+
+def lambda_handler(event, context):
+
+    requested = []
+
+    for record in event['Records']:
+        if(record['eventName'] == "INSERT"):
+            id = record['dynamodb']['Keys']['id']['S']
+            requested.append(get_requested_size(id))
+
+    for requested_size in requested:
+        process_request(requested_size)
