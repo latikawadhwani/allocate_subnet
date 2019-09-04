@@ -16,6 +16,12 @@ variable "timeout" {
   default     = "10"
 }
 
+variable "billing_mode" {
+  description = "billing mode"
+  type = "string"
+  default = "PAY_PER_REQUEST"
+}
+
 variable "read_capacity" {
   description = "number of read units"
   type        = "string"

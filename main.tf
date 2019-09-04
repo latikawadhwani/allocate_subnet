@@ -47,12 +47,15 @@ resource "aws_iam_role_policy_attachment" "AWSLambdaDynamoDbRead-attach" {
   policy_arn = "arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB"
 }
 
+resource "aws_iam_role_policy_attachment" "AmazonDynamoDBFullAccess" {
+  role       = "${aws_iam_role.iam_role_for_lambda.name}"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
 resource "aws_dynamodb_table" "lambda-allocation-requests" {
   name = "lambda-allocation-requests"
   hash_key = "id"
-  billing_mode = "PROVISIONED"
-  read_capacity = "${var.read_capacity}"
-  write_capacity = "${var.write_capacity}"
+  billing_mode = "${var.billing_mode}"
   attribute {
     name = "id"
     type = "S"
