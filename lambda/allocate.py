@@ -1,8 +1,11 @@
 
 import ipaddress
+import sys
 from ipaddress import *
 import json
 import boto3
+import traceback
+from boto3.dynamodb.conditions import Key
 
 networks = [IPv4Network('192.0.0.0/24')]
 
@@ -13,35 +16,52 @@ Addresses = {'small': 4, 'medium': 8, 'large': 16}
 
 dynamodb = boto3.resource('dynamodb')
 
-def get_previous_allocation_list():
-    allocated = []
-    table = dynamodb.Table('account_allocations')
-    response = table.scan()
-    items = response['Items']
-    for item in items:
-        allocated.append(item['allocated_address'])
-    return allocated
+def _get_previous_allocation_list():
+    try:
+        allocated = []
+        table = dynamodb.Table('account_allocations')
+        response = table.scan()
+        items = response['Items']
+        for item in items:
+            allocated.append(item['allocated_address'])
+        return allocated
+    except Exception:
+        print("something went wrong while getting previous allocations")
+        error = traceback.format_exc()
+        print(error)
+        return []
 
-def update_allocated(username, allocated_address, allocated_size):
-    table = dynamodb.Table('account_allocations')
-    table.put_item(
-        Item={
-            'username': username,
-            'allocated_size': allocated_size,
-            'allocated_address': allocated_address
-        })
+def _update_allocated(username, allocated_address, allocated_size):
+    try:
+        table = dynamodb.Table('account_allocations')
+        table.put_item(
+            Item={
+                'username': username,
+                'allocated_size': allocated_size,
+                'allocated_address': allocated_address
+            })
+    except Exception:
+        print("failed to update account allocations in database")
+        error = traceback.format_exc()
+        print(error)
 
-def get_requested_size(id):
-    table = dynamodb.Table('lambda-allocation-requests')
-    response = table.query(
-    KeyConditionExpression=Key('id').eq(id))
-    items = response['Items']
-    for item in items:
-        print(item)
-        return item['request_size']
+def _get_requested_size(id):
+    try:
+        table = dynamodb.Table('lambda-allocation-requests')
+        response = table.query(
+        KeyConditionExpression=Key('id').eq(id))
+        items = response['Items']
+        for item in items:
+            print(item)
+            return item['request_size']
+    except Exception:
+        print("failed to get requested size")
+        error = traceback.format_exc()
+        print(error)
+        return ""
 
 # calculate updated from previous allocations
-def get_same_or_next(networks, allocated):
+def _get_same_or_next(networks, allocated):
     for allocated_network in allocated:
         a=IPv4Network(allocated_network)
         for network in networks:
@@ -65,7 +85,7 @@ def get_same_or_next(networks, allocated):
     prev_allocation['allocated'] = allocated
     return prev_allocation
 
-def allocate_new(networks, allocated, requested):
+def _allocate_new(networks, allocated, requested):
     len_networks = len(networks)
     len_allocated = len(allocated)
     for i in range(len_networks):
@@ -76,14 +96,14 @@ def allocate_new(networks, allocated, requested):
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
             allocated.append(str(networks[i]))
-            update_allocated('some_user', str(networks[i]), requested)
+            _update_allocated('some_user', str(networks[i]), requested)
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
-            update_allocated('some_user', str(n), requested)
+            _update_allocated('some_user', str(n), requested)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:
@@ -108,7 +128,7 @@ def process_request(requested_size):
     allocated_updated = []
     prev_allocation = dict()
 
-    allocated = get_previous_allocation_list()
+    allocated = _get_previous_allocation_list()
 
     if not allocated:
         print("none allocated, skip checking previous allocations")
@@ -116,7 +136,7 @@ def process_request(requested_size):
         prev_allocation['allocated'] = allocated
     else:
         print('getting previous allocations')
-        prev_allocation = get_same_or_next(networks, allocated)
+        prev_allocation = _get_same_or_next(networks, allocated)
 
     networks_updated = prev_allocation['networks']
     allocated_updated = prev_allocation['allocated']
@@ -129,7 +149,7 @@ def process_request(requested_size):
     if not networks_updated:
         print('none available')
     else:
-        new_allocation = allocate_new(networks_updated, allocated_updated, requested_size)
+        new_allocation = _allocate_new(networks_updated, allocated_updated, requested_size)
         network_new = new_allocation['networks']
         allocated_new = new_allocation['allocated']
         print("available network - ")
@@ -144,7 +164,7 @@ def lambda_handler(event, context):
     for record in event['Records']:
         if(record['eventName'] == "INSERT"):
             id = record['dynamodb']['Keys']['id']['S']
-            requested.append(get_requested_size(id))
+            requested.append(_get_requested_size(id))
 
     for requested_size in requested:
         process_request(requested_size)
