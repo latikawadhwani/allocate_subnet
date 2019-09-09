@@ -5,6 +5,7 @@ from ipaddress import *
 import json
 import boto3
 import traceback
+import uuid
 from boto3.dynamodb.conditions import Key
 
 networks = [IPv4Network('192.0.0.0/24')]
@@ -31,11 +32,12 @@ def _get_previous_allocation_list():
         print(error)
         return []
 
-def _update_allocated(username, allocated_address, allocated_size):
+def _update_allocated(id, username, allocated_address, allocated_size):
     try:
         table = dynamodb.Table('account_allocations')
         table.put_item(
             Item={
+                'id': id,
                 'username': username,
                 'allocated_size': allocated_size,
                 'allocated_address': allocated_address
@@ -88,6 +90,8 @@ def _get_same_or_next(networks, allocated):
 def _allocate_new(networks, allocated, requested):
     len_networks = len(networks)
     len_allocated = len(allocated)
+    networks = sorted(networks)
+    id = str(uuid.uuid4())
     for i in range(len_networks):
         print('checking availability in ' + str(i))
         print(networks[i])
@@ -96,14 +100,14 @@ def _allocate_new(networks, allocated, requested):
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
             allocated.append(str(networks[i]))
-            _update_allocated('some_user', str(networks[i]), requested)
+            _update_allocated(id, 'some_user', str(networks[i]), requested)
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
-            _update_allocated('some_user', str(n), requested)
+            _update_allocated(id, 'some_user', str(n), requested)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:

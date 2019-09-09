@@ -72,8 +72,6 @@ resource "aws_dynamodb_table" "account_allocations" {
     name = "id"
     type = "S"
   }
-  stream_enabled = "${var.stream_enabled}"
-  stream_view_type = "${var.stream_view_type}"
 }
 
 resource "aws_lambda_event_source_mapping" "lambda_allocation_stream" {
