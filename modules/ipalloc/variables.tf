@@ -16,6 +16,12 @@ variable "timeout" {
   default     = "10"
 }
 
+variable "reserved_concurrent_executions" {
+  description = "maximum number of concurrent executions for lambda function"
+  type = "string"
+  default = "1"
+}
+
 variable "billing_mode" {
   description = "billing mode"
   type = "string"

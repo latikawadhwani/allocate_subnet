@@ -11,6 +11,7 @@ resource "aws_lambda_function" "function_allocate" {
   memory_size      = "${var.memory_size}"
   runtime          = "${var.runtime}"
   timeout          = "${var.timeout}"
+  reserved_concurrent_executions = 1
   handler          = "allocate.lambda_handler"
   filename         = "${path.root}/allocate.zip"
   source_code_hash = "${data.archive_file.allocate.output_base64sha256}"
@@ -67,9 +68,14 @@ resource "aws_dynamodb_table" "lambda-allocation-requests" {
 resource "aws_dynamodb_table" "account_allocations" {
   name = "account_allocations"
   hash_key = "id"
+  range_key = "time_allocated"
   billing_mode = "${var.billing_mode}"
   attribute {
     name = "id"
+    type = "S"
+  }
+  attribute {
+    name = "time_allocated"
     type = "S"
   }
 }

@@ -7,13 +7,15 @@ import boto3
 import traceback
 import uuid
 from boto3.dynamodb.conditions import Key
+import datetime
 
-networks = [IPv4Network('192.0.0.0/24')]
 
-Size = {'small': 30, 'medium': 29, 'large': 28}
+networks = [IPv4Network('192.0.0.0/16')]
+
+Size = {'small': 24, 'medium': 23, 'large': 22}
 
 # TODO: Save and get map from db
-Addresses = {'small': 4, 'medium': 8, 'large': 16}
+Addresses = {'small': 256, 'medium': 512, 'large': 1024}
 
 dynamodb = boto3.resource('dynamodb')
 
@@ -32,12 +34,13 @@ def _get_previous_allocation_list():
         print(error)
         return []
 
-def _update_allocated(id, username, allocated_address, allocated_size):
+def _update_allocated(id, time_allocated, username, allocated_address, allocated_size):
     try:
         table = dynamodb.Table('account_allocations')
         table.put_item(
             Item={
                 'id': id,
+                'time_allocated': time_allocated,
                 'username': username,
                 'allocated_size': allocated_size,
                 'allocated_address': allocated_address
@@ -92,6 +95,7 @@ def _allocate_new(networks, allocated, requested):
     len_allocated = len(allocated)
     networks = sorted(networks)
     id = str(uuid.uuid4())
+    time_allocated = datetime.datetime.now().isoformat()
     for i in range(len_networks):
         print('checking availability in ' + str(i))
         print(networks[i])
@@ -100,14 +104,14 @@ def _allocate_new(networks, allocated, requested):
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
             allocated.append(str(networks[i]))
-            _update_allocated(id, 'some_user', str(networks[i]), requested)
+            _update_allocated(id, time_allocated, 'some_user', str(networks[i]), requested)
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
-            _update_allocated(id, 'some_user', str(n), requested)
+            _update_allocated(id, time_allocated, 'some_user', str(n), requested)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:
@@ -168,7 +172,8 @@ def lambda_handler(event, context):
     for record in event['Records']:
         if(record['eventName'] == "INSERT"):
             id = record['dynamodb']['Keys']['id']['S']
-            requested.append(_get_requested_size(id))
+            process_request(_get_requested_size(id))
+            #requested.append(_get_requested_size(id))
 
-    for requested_size in requested:
-        process_request(requested_size)
+#    for requested_size in requested:
+#        process_request(requested_size)
