@@ -1,28 +1,72 @@
-import sys
+
 import ipaddress
+import sys
 from ipaddress import *
 import json
+import boto3
+import traceback
+import uuid
+from boto3.dynamodb.conditions import Key
+import datetime
 
 
-Size = {'small': 30, 'medium': 29, 'large': 28}
+networks = [IPv4Network('192.0.0.0/16')]
 
-# TODO: Save and get map from db 
-Addresses = {'small': 4, 'medium': 8, 'large': 16} 
+Size = {'small': 24, 'medium': 23, 'large': 22}
 
-def get_previous_allocation_list():
-    allocated = []
-    with open('allocated.json') as json_file:
-        data = json.load(json_file)
-        allocated = data["allocated"]
-    return allocated
+# TODO: Save and get map from db
+Addresses = {'small': 256, 'medium': 512, 'large': 1024}
 
-def dump_to_json_file(data_new):
-    with open('allocated.json', 'w') as outfile:
-                json.dump(data_new, outfile)
+dynamodb = boto3.resource('dynamodb')
 
+def _get_previous_allocation_list():
+    try:
+        allocated = []
+        table = dynamodb.Table('account_allocations')
+        response = table.scan()
+        items = response['Items']
+        for item in items:
+            allocated.append(item['allocated_address'])
+        return allocated
+    except Exception:
+        print("something went wrong while getting previous allocations")
+        error = traceback.format_exc()
+        print(error)
+        return []
+
+def _update_allocated(id, time_allocated, username, allocated_address, allocated_size):
+    try:
+        table = dynamodb.Table('account_allocations')
+        table.put_item(
+            Item={
+                'id': id,
+                'time_allocated': time_allocated,
+                'username': username,
+                'allocated_size': allocated_size,
+                'allocated_address': allocated_address
+            })
+    except Exception:
+        print("failed to update account allocations in database")
+        error = traceback.format_exc()
+        print(error)
+
+def _get_requested_size(id):
+    try:
+        table = dynamodb.Table('lambda-allocation-requests')
+        response = table.query(
+        KeyConditionExpression=Key('id').eq(id))
+        items = response['Items']
+        for item in items:
+            print(item)
+            return item['request_size']
+    except Exception:
+        print("failed to get requested size")
+        error = traceback.format_exc()
+        print(error)
+        return ""
 
 # calculate updated from previous allocations
-def get_same_or_next(networks, allocated):
+def _get_same_or_next(networks, allocated):
     for allocated_network in allocated:
         a=IPv4Network(allocated_network)
         for network in networks:
@@ -40,15 +84,18 @@ def get_same_or_next(networks, allocated):
                     networks.append(addr)
                 networks = sorted(networks)
                 break
-                
-    prev_allocation = dict() 
+
+    prev_allocation = dict()
     prev_allocation['networks'] = networks
     prev_allocation['allocated'] = allocated
     return prev_allocation
 
-def allocate_new(networks, allocated, requested):
+def _allocate_new(networks, allocated, requested):
     len_networks = len(networks)
     len_allocated = len(allocated)
+    networks = sorted(networks)
+    id = str(uuid.uuid4())
+    time_allocated = datetime.datetime.now().isoformat()
     for i in range(len_networks):
         print('checking availability in ' + str(i))
         print(networks[i])
@@ -57,16 +104,14 @@ def allocate_new(networks, allocated, requested):
         if (Addresses[requested]==networks[i].num_addresses): # get hosts, if requested number of hosts is same as available allocate else find next larger subnet
             print("allocating from original")
             allocated.append(str(networks[i]))
-            data_new={"allocated": allocated}
-            dump_to_json_file(data_new)
+            _update_allocated(id, time_allocated, 'some_user', str(networks[i]), requested)
             networks.remove(networks[i])
             break
         elif(Addresses[requested] < networks[i].num_addresses):
             print("allocating from subnet")
             n=list(networks[i].subnets(new_prefix=Size[requested]))[0]
             allocated.append(str(n))
-            data_new={"allocated": allocated}
-            dump_to_json_file(data_new)
+            _update_allocated(id, time_allocated, 'some_user', str(n), requested)
             after_exclude=list(networks[i].address_exclude(n))
             networks.remove(networks[i])
             for addr in after_exclude:
@@ -75,33 +120,23 @@ def allocate_new(networks, allocated, requested):
     if(len(allocated) == len_allocated):
                 print('not allocated, try another size. Available - ' + str(networks[i].num_addresses))
                 sys.exit()
-    
-    new_allocation = dict() 
+
+    new_allocation = dict()
     new_allocation['networks'] = networks
     new_allocation['allocated'] = allocated
     return new_allocation
 
-
-def main():
-
-    if len(sys.argv) < 2:
-        print("Incorrect usage")
-        sys.exit()
-
-    requested=str(sys.argv[1])
-    if requested not in Addresses:
+def process_request(requested_size):
+    if requested_size not in Addresses:
         print('Invalid size')
         sys.exit()
-    print('requested size - ' + requested)
-
-    # TODO get network address from input
-    networks=[IPv4Network(u'192.0.0.0/24')]
+    print('requested size - ' + requested_size)
 
     networks_updated = []
     allocated_updated = []
     prev_allocation = dict()
 
-    allocated = get_previous_allocation_list()
+    allocated = _get_previous_allocation_list()
 
     if not allocated:
         print("none allocated, skip checking previous allocations")
@@ -109,10 +144,11 @@ def main():
         prev_allocation['allocated'] = allocated
     else:
         print('getting previous allocations')
-        prev_allocation = get_same_or_next(networks, allocated)
+        prev_allocation = _get_same_or_next(networks, allocated)
 
     networks_updated = prev_allocation['networks']
     allocated_updated = prev_allocation['allocated']
+
     print('available - ')
     print(networks_updated)
     print('allocated - ')
@@ -121,7 +157,7 @@ def main():
     if not networks_updated:
         print('none available')
     else:
-        new_allocation = allocate_new(networks_updated, allocated_updated, requested)
+        new_allocation = _allocate_new(networks_updated, allocated_updated, requested_size)
         network_new = new_allocation['networks']
         allocated_new = new_allocation['allocated']
         print("available network - ")
@@ -129,8 +165,15 @@ def main():
         print("allocated pool - ")
         print(allocated_new)
 
+def lambda_handler(event, context):
 
-if __name__ == "__main__":
-    main()
+    requested = []
 
+    for record in event['Records']:
+        if(record['eventName'] == "INSERT"):
+            id = record['dynamodb']['Keys']['id']['S']
+            process_request(_get_requested_size(id))
+            #requested.append(_get_requested_size(id))
 
+#    for requested_size in requested:
+#        process_request(requested_size)
